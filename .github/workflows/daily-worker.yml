@@ -1,0 +1,27 @@
+name: Daily Cantinas Meal
+
+on:
+  schedule:
+    - cron: "0 9 * * *"   
+  workflow_dispatch:      
+
+jobs:
+  post-meal:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Post menu to Discord webhook
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          CANTINAS_API_BASE: https://api.cantinas.pt/
+          TZ_NAME: Europe/Lisbon
+          WEBHOOK_USERNAME: Cantinas
+        run: python canteen_api_fetcher.py
