@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 
 API_BASE = os.getenv("CANTINAS_API_BASE", "https://api.cantinas.pt/")
-WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1475613328310272222/W_CBlWME6-Qm1WrO_WqgnAoNKlNdduqlg_LcdP7bgy8yhXMTwvGcNFinnttLUBAhrI4k")
+WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 TZ_NAME = os.getenv("TZ_NAME", "Europe/Lisbon")
 WEBHOOK_USERNAME = os.getenv("WEBHOOK_USERNAME", "Ementa UA")
 TARGET_DATE = os.getenv("TARGET_DATE")  
