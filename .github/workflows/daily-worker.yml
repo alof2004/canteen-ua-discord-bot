@@ -2,7 +2,7 @@ name: Daily Cantinas Meal
 
 on:
   schedule:
-    - cron: "0 9 * * *"   
+    - cron: "0 23 * * *"   
   workflow_dispatch:      
 
 jobs:

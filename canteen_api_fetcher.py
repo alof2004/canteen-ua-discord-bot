@@ -13,15 +13,15 @@ from zoneinfo import ZoneInfo
 
 
 API_BASE = os.getenv("CANTINAS_API_BASE", "https://api.cantinas.pt/")
-WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1475613328310272222/W_CBlWME6-Qm1WrO_WqgnAoNKlNdduqlg_LcdP7bgy8yhXMTwvGcNFinnttLUBAhrI4k")
 TZ_NAME = os.getenv("TZ_NAME", "Europe/Lisbon")
-WEBHOOK_USERNAME = os.getenv("WEBHOOK_USERNAME", "Cantina")
-TARGET_DATE = os.getenv("TARGET_DATE", "2025-02-24") 
-DISCORD_SAFE_LIMIT = 1900
+WEBHOOK_USERNAME = os.getenv("WEBHOOK_USERNAME", "Ementa UA")
+TARGET_DATE = os.getenv("TARGET_DATE")  
 ALLOWED_REFEITORIO_ORDER = ("Santiago", "Crasto")
 ALLOWED_REFEITORIO_LOOKUP = {
     name.casefold(): name for name in ALLOWED_REFEITORIO_ORDER
 }
+DISCORD_INDENT = "\u00A0" * 4
 
 
 def fail(msg: str, code: int = 1):
@@ -81,36 +81,6 @@ def display_date(date_str: str) -> str:
         return date_str
 
 
-def split_discord_messages(text: str, limit: int = DISCORD_SAFE_LIMIT):
-    """Split long content into safe chunks for Discord."""
-    if len(text) <= limit:
-        return [text]
-
-    chunks = []
-    current = ""
-
-    for line in text.splitlines(keepends=True):
-        if len(current) + len(line) <= limit:
-            current += line
-            continue
-
-        if current:
-            chunks.append(current.rstrip())
-            current = ""
-
-        # If a single line is too long, hard-split it
-        while len(line) > limit:
-            chunks.append(line[:limit])
-            line = line[limit:]
-
-        current = line
-
-    if current:
-        chunks.append(current.rstrip())
-
-    return chunks
-
-
 def component_items(componentes):
     """Return normalized component items preserving display names."""
     items = []
@@ -151,7 +121,47 @@ def split_soup_components(componentes):
 
 def format_component_pair(pair):
     tipo, nome = pair
-    return f"**{tipo}:** {nome}"
+    return f"{component_type_emoji(tipo)} **{tipo}:** {nome}"
+
+
+def component_pair_key(pair):
+    tipo, nome = pair
+    return (normalize_ascii(tipo), normalize_ascii(nome))
+
+
+def component_type_emoji(tipo: str) -> str:
+    normalized = normalize_ascii(tipo)
+    if normalized == "sopa":
+        return "🍲"
+    if normalized == "prato":
+        return "🍽️"
+    if "sobremesa" in normalized:
+        return "🍰"
+    return "•"
+
+
+def menu_name_emoji(menu_name: str) -> str:
+    normalized = normalize_ascii(menu_name)
+    if "peixe" in normalized:
+        return "🐟"
+    if "carne" in normalized:
+        return "🍖"
+    if "veget" in normalized:
+        return "🥦"
+    if "dieta" in normalized:
+        return "🥗"
+    if "sopa" in normalized:
+        return "🍲"
+    return "🍽️"
+
+
+def periodo_emoji(periodo: str) -> str:
+    normalized = normalize_ascii(periodo)
+    if normalized == "almoco":
+        return "🌞"
+    if normalized == "jantar":
+        return "🌙"
+    return "🕒"
 
 
 def period_sort_key(periodo: str):
@@ -163,17 +173,20 @@ def period_sort_key(periodo: str):
     return (99, normalized)
 
 
+def indent(level: int) -> str:
+    return DISCORD_INDENT * max(level, 0)
+
+
 def format_menu_message(payload, target_date: str) -> str:
     """Format API payload into a cleaner Discord message."""
-    header = f"**Menu do dia - {display_date(target_date)}**"
-    subtitle = "_Refeitorios: Santiago, Crasto_"
+    header = f"🍽️ **Menu do dia - {display_date(target_date)}**"
 
     if not isinstance(payload, list):
         preview = json.dumps(payload, ensure_ascii=False, indent=2)
         if len(preview) > 1500:
             preview = preview[:1500] + "\n... (truncated)"
         return (
-            f"{header}\n{subtitle}\n"
+            f"{header}\n"
             "Formato inesperado da API:\n"
             f"```json\n{preview}\n```"
         )
@@ -211,14 +224,14 @@ def format_menu_message(payload, target_date: str) -> str:
             )
 
     if not grouped:
-        return f"{header}\n{subtitle}\nSem resultados para Santiago/Crasto."
+        return f"{header}\nSem resultados para Santiago/Crasto."
 
     periods = sorted(grouped.keys(), key=period_sort_key)
 
-    lines = [header, subtitle, ""]
+    lines = [header, ""]
 
     for periodo in periods:
-        lines.append(f"**{periodo}**")
+        lines.append(f"{periodo_emoji(periodo)} **{periodo}**")
 
         period_had_entries = False
         for refeitorio in ALLOWED_REFEITORIO_ORDER:
@@ -227,53 +240,52 @@ def format_menu_message(payload, target_date: str) -> str:
                 continue
 
             period_had_entries = True
-            lines.append(f"`{refeitorio}`")
+            lines.append(f"{indent(1)}📍 `{refeitorio}`")
 
             prepared_entries = []
-            soup_signatures = []
+            shared_soups = []
+            seen_soup_keys = set()
 
             for entry in entries:
                 soups, others = split_soup_components(entry["componentes"])
+                for soup_pair in soups:
+                    soup_key = component_pair_key(soup_pair)
+                    if soup_key in seen_soup_keys:
+                        continue
+                    seen_soup_keys.add(soup_key)
+                    shared_soups.append(soup_pair)
+
                 prepared_entries.append(
                     {
                         "nome_menu": entry["nome_menu"],
-                        "soups": soups,
                         "others": others,
                     }
                 )
-                soup_signatures.append(tuple(soups))
-
-            shared_soups = []
-            if (
-                soup_signatures
-                and soup_signatures[0]
-                and all(sig == soup_signatures[0] for sig in soup_signatures[1:])
-            ):
-                shared_soups = list(soup_signatures[0])
 
             for soup_pair in shared_soups:
-                lines.append(f"- {format_component_pair(soup_pair)}")
+                lines.append(f"{indent(2)}• {format_component_pair(soup_pair)}")
 
             for entry in prepared_entries:
                 menu_name = entry["nome_menu"]
-                soups = [] if shared_soups else entry["soups"]
                 others = entry["others"]
+                menu_icon = menu_name_emoji(menu_name)
 
                 if len(others) == 1 and normalize_ascii(others[0][0]) == "prato":
-                    lines.append(f"- **{menu_name}:** {others[0][1]}")
-                    if soups:
-                        for soup_pair in soups:
-                            lines.append(f"  - {format_component_pair(soup_pair)}")
+                    lines.append(
+                        f"{indent(2)}• {menu_icon} **{menu_name}:** {others[0][1]}"
+                    )
                     continue
 
-                lines.append(f"- **{menu_name}**")
+                lines.append(f"{indent(2)}• {menu_icon} **{menu_name}**")
 
-                detail_pairs = others + soups
+                detail_pairs = others
                 if detail_pairs:
                     for pair in detail_pairs:
-                        lines.append(f"  - {format_component_pair(pair)}")
+                        lines.append(
+                            f"{indent(3)}• {format_component_pair(pair)}"
+                        )
                 else:
-                    lines.append("  - _(sem componentes)_")
+                    lines.append(f"{indent(3)}• _(sem componentes)_")
 
             lines.append("")
 
@@ -284,18 +296,15 @@ def format_menu_message(payload, target_date: str) -> str:
 
 
 def post_to_discord(text: str):
-    chunks = split_discord_messages(text, DISCORD_SAFE_LIMIT)
-
-    for i, chunk in enumerate(chunks, start=1):
-        payload = {
-            "content": chunk,
-            "username": WEBHOOK_USERNAME,
-            "allowed_mentions": {"parse": []},
-        }
-        status, body = http_post_json(WEBHOOK_URL, payload)
-        print(f"Posted chunk {i}/{len(chunks)} (HTTP {status})")
-        if status not in (200, 204):
-            print(body, file=sys.stderr)
+    payload = {
+        "content": text,
+        "username": WEBHOOK_USERNAME,
+        "allowed_mentions": {"parse": []},
+    }
+    status, body = http_post_json(WEBHOOK_URL, payload)
+    print(f"Posted message (HTTP {status})")
+    if status not in (200, 204):
+        print(body, file=sys.stderr)
 
 
 def main():
