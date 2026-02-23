@@ -4,6 +4,7 @@
 import json
 import os
 import sys
+import unicodedata
 from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -15,8 +16,12 @@ API_BASE = os.getenv("CANTINAS_API_BASE", "https://api.cantinas.pt/")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 TZ_NAME = os.getenv("TZ_NAME", "Europe/Lisbon")
 WEBHOOK_USERNAME = os.getenv("WEBHOOK_USERNAME", "Cantina")
-TARGET_DATE = os.getenv("2025-02-24")  # optional YYYY-MM-DD (for manual testing)
+TARGET_DATE = os.getenv("TARGET_DATE", "2025-02-24") 
 DISCORD_SAFE_LIMIT = 1900
+ALLOWED_REFEITORIO_ORDER = ("Santiago", "Crasto")
+ALLOWED_REFEITORIO_LOOKUP = {
+    name.casefold(): name for name in ALLOWED_REFEITORIO_ORDER
+}
 
 
 def fail(msg: str, code: int = 1):
@@ -47,8 +52,19 @@ def http_post_json(url: str, payload: dict):
         return resp.status, body
 
 
-def clean_text(s):
-    return " ".join(str(s or "").strip().split())
+def clean_text(value):
+    return " ".join(str(value or "").strip().split())
+
+
+def normalize_ascii(value):
+    text = clean_text(value)
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return text.casefold()
+
+
+def canonical_refeitorio_name(value):
+    return ALLOWED_REFEITORIO_LOOKUP.get(normalize_ascii(value))
 
 
 def get_target_date_str() -> str:
@@ -56,6 +72,13 @@ def get_target_date_str() -> str:
         return TARGET_DATE
     tz = ZoneInfo(TZ_NAME)
     return datetime.now(tz).date().isoformat()
+
+
+def display_date(date_str: str) -> str:
+    try:
+        return datetime.fromisoformat(date_str).strftime("%d/%m/%Y")
+    except ValueError:
+        return date_str
 
 
 def split_discord_messages(text: str, limit: int = DISCORD_SAFE_LIMIT):
@@ -89,13 +112,7 @@ def split_discord_messages(text: str, limit: int = DISCORD_SAFE_LIMIT):
 
 
 def component_lines(componentes):
-    """
-    Converts:
-      {"Nome": "...", "TipoString": "Prato", "Alergenicos": [...]}
-    into:
-      • Prato: ...
-      • Sopa: ...
-    """
+    """Return formatted component lines for a menu entry."""
     lines = []
 
     for comp in componentes or []:
@@ -104,90 +121,102 @@ def component_lines(componentes):
 
         nome = clean_text(comp.get("Nome"))
         tipo = clean_text(comp.get("TipoString")) or "Item"
-
         if not nome:
             continue
 
-        line = f"• **{tipo}:** {nome}"
-        lines.append(line)
+        lines.append(f"**{tipo}:** {nome}")
 
     return lines
 
 
+def period_sort_key(periodo: str):
+    normalized = normalize_ascii(periodo)
+    if normalized == "almoco":
+        return (0, normalized)
+    if normalized == "jantar":
+        return (1, normalized)
+    return (99, normalized)
+
+
 def format_menu_message(payload, target_date: str) -> str:
-    """
-    Expected payload is a list like:
-    [
-      {
-        "Periodo": "Almoço",
-        "Data": "2026-02-27T00:00:00",
-        "Nome": "PRATO CARNE",
-        "Refeitorios": ["Santiago"],
-        "Componentes": [...]
-      },
-      ...
-    ]
-    """
+    """Format API payload into a cleaner Discord message."""
+    header = f"**Menu do dia - {display_date(target_date)}**"
+    subtitle = "_Refeitorios: Santiago, Crasto_"
+
     if not isinstance(payload, list):
         preview = json.dumps(payload, ensure_ascii=False, indent=2)
         if len(preview) > 1500:
             preview = preview[:1500] + "\n... (truncated)"
         return (
-            f"🍽️ **Menu do dia — {target_date}**\n"
+            f"{header}\n{subtitle}\n"
             "Formato inesperado da API:\n"
             f"```json\n{preview}\n```"
         )
 
-    # Group by Periodo -> Refeitorio
     grouped = {}
 
     for item in payload:
         if not isinstance(item, dict):
             continue
 
-        periodo = clean_text(item.get("Periodo")) or "Sem período"
-        refeitorios = item.get("Refeitorios") or []
-        if isinstance(refeitorios, list) and refeitorios:
-            refeitorio = clean_text(refeitorios[0]) or "Sem refeitório"
-        else:
-            refeitorio = "Sem refeitório"
+        periodo = clean_text(item.get("Periodo")) or "Sem periodo"
+
+        raw_refeitorios = item.get("Refeitorios") or []
+        if not isinstance(raw_refeitorios, list):
+            raw_refeitorios = [raw_refeitorios]
+
+        allowed_refeitorios = []
+        for raw_refeitorio in raw_refeitorios:
+            canonical = canonical_refeitorio_name(raw_refeitorio)
+            if canonical and canonical not in allowed_refeitorios:
+                allowed_refeitorios.append(canonical)
+
+        if not allowed_refeitorios:
+            continue
 
         nome_menu = clean_text(item.get("Nome")) or "Menu"
         componentes = item.get("Componentes") or []
 
-        grouped.setdefault(periodo, {}).setdefault(refeitorio, []).append({
-            "nome_menu": nome_menu,
-            "componentes": componentes,
-        })
+        for refeitorio in allowed_refeitorios:
+            grouped.setdefault(periodo, {}).setdefault(refeitorio, []).append(
+                {
+                    "nome_menu": nome_menu,
+                    "componentes": componentes,
+                }
+            )
 
     if not grouped:
-        return f"🍽️ **Menu do dia — {target_date}**\nSem resultados."
+        return f"{header}\n{subtitle}\nSem resultados para Santiago/Crasto."
 
-    # Nice period order
-    preferred_period_order = ["Almoço", "Jantar"]
-    periods = sorted(
-        grouped.keys(),
-        key=lambda p: (preferred_period_order.index(p) if p in preferred_period_order else 999, p)
-    )
+    periods = sorted(grouped.keys(), key=period_sort_key)
 
-    lines = [f"🍽️ **Menu do dia — {target_date}**", ""]
+    lines = [header, subtitle, ""]
 
     for periodo in periods:
-        lines.append(f"## {periodo}")
+        lines.append(f"**{periodo}**")
 
-        for refeitorio in sorted(grouped[periodo].keys()):
-            lines.append(f"**📍 {refeitorio}**")
+        period_had_entries = False
+        for refeitorio in ALLOWED_REFEITORIO_ORDER:
+            entries = grouped[periodo].get(refeitorio)
+            if not entries:
+                continue
 
-            for entry in grouped[periodo][refeitorio]:
-                lines.append(f"**{entry['nome_menu']}**")
-                comp = component_lines(entry["componentes"])
-                if comp:
-                    lines.extend(comp)
+            period_had_entries = True
+            lines.append(f"`{refeitorio}`")
+
+            for entry in entries:
+                lines.append(f"- **{entry['nome_menu']}**")
+                comps = component_lines(entry["componentes"])
+                if comps:
+                    for comp_line in comps:
+                        lines.append(f"  - {comp_line}")
                 else:
-                    lines.append("• _(sem componentes)_")
-                lines.append("")
+                    lines.append("  - _(sem componentes)_")
 
-        lines.append("")
+            lines.append("")
+
+        if period_had_entries and lines[-1] != "":
+            lines.append("")
 
     return "\n".join(lines).rstrip()
 
