@@ -30,7 +30,7 @@ def load_dotenv_file(path: str = ".env"):
 
 load_dotenv_file()
 API_BASE = os.getenv("CANTINAS_API_BASE", "https://api.cantinas.pt/")
-WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/....")
+WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 TZ_NAME = os.getenv("TZ_NAME", "Europe/Lisbon")
 WEBHOOK_USERNAME = os.getenv("WEBHOOK_USERNAME", "Ementa UA")
 TARGET_DATE = os.getenv("TARGET_DATE")  
