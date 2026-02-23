@@ -111,9 +111,9 @@ def split_discord_messages(text: str, limit: int = DISCORD_SAFE_LIMIT):
     return chunks
 
 
-def component_lines(componentes):
-    """Return formatted component lines for a menu entry."""
-    lines = []
+def component_items(componentes):
+    """Return normalized component items preserving display names."""
+    items = []
 
     for comp in componentes or []:
         if not isinstance(comp, dict):
@@ -124,9 +124,34 @@ def component_lines(componentes):
         if not nome:
             continue
 
-        lines.append(f"**{tipo}:** {nome}")
+        items.append(
+            {
+                "tipo": tipo,
+                "tipo_key": normalize_ascii(tipo),
+                "nome": nome,
+            }
+        )
 
-    return lines
+    return items
+
+
+def split_soup_components(componentes):
+    soups = []
+    others = []
+
+    for item in component_items(componentes):
+        pair = (item["tipo"], item["nome"])
+        if item["tipo_key"] == "sopa":
+            soups.append(pair)
+        else:
+            others.append(pair)
+
+    return soups, others
+
+
+def format_component_pair(pair):
+    tipo, nome = pair
+    return f"**{tipo}:** {nome}"
 
 
 def period_sort_key(periodo: str):
@@ -204,12 +229,49 @@ def format_menu_message(payload, target_date: str) -> str:
             period_had_entries = True
             lines.append(f"`{refeitorio}`")
 
+            prepared_entries = []
+            soup_signatures = []
+
             for entry in entries:
-                lines.append(f"- **{entry['nome_menu']}**")
-                comps = component_lines(entry["componentes"])
-                if comps:
-                    for comp_line in comps:
-                        lines.append(f"  - {comp_line}")
+                soups, others = split_soup_components(entry["componentes"])
+                prepared_entries.append(
+                    {
+                        "nome_menu": entry["nome_menu"],
+                        "soups": soups,
+                        "others": others,
+                    }
+                )
+                soup_signatures.append(tuple(soups))
+
+            shared_soups = []
+            if (
+                soup_signatures
+                and soup_signatures[0]
+                and all(sig == soup_signatures[0] for sig in soup_signatures[1:])
+            ):
+                shared_soups = list(soup_signatures[0])
+
+            for soup_pair in shared_soups:
+                lines.append(f"- {format_component_pair(soup_pair)}")
+
+            for entry in prepared_entries:
+                menu_name = entry["nome_menu"]
+                soups = [] if shared_soups else entry["soups"]
+                others = entry["others"]
+
+                if len(others) == 1 and normalize_ascii(others[0][0]) == "prato":
+                    lines.append(f"- **{menu_name}:** {others[0][1]}")
+                    if soups:
+                        for soup_pair in soups:
+                            lines.append(f"  - {format_component_pair(soup_pair)}")
+                    continue
+
+                lines.append(f"- **{menu_name}**")
+
+                detail_pairs = others + soups
+                if detail_pairs:
+                    for pair in detail_pairs:
+                        lines.append(f"  - {format_component_pair(pair)}")
                 else:
                     lines.append("  - _(sem componentes)_")
 
