@@ -7,9 +7,14 @@ This repository is set up to run automatically with GitHub Actions (`.github/wor
 ## GitHub Actions Setup (Recommended)
 
 1. Fork this repository (or push it to your own repo).
-2. Create a Discord webhook in the channel where you want the menu posted. 
-![Go to Server Setting](figs/image.png)
-![Click on "Webhooks" and create a new one](figs/image-1.png)
+2. Create a Discord webhook in the channel where you want the menu posted.
+
+   <p align="center">
+     <img src="figs/image.png" alt="Discord server settings" width="48%" />
+     <img src="figs/image-1.png" alt="Discord webhooks page" width="48%" />
+   </p>
+
+   <p align="center"><sub>Discord: Server Settings -> Integrations -> Webhooks</sub></p>
 3. In your GitHub repo, go to `Settings` -> `Secrets and variables` -> `Actions`.
 4. Create a repository secret named `DISCORD_WEBHOOK_URL`.
 5. Paste your Discord webhook URL as the secret value.
