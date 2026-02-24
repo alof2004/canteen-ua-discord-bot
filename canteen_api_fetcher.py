@@ -317,7 +317,9 @@ def post_to_discord(text: str):
     payload = {
         "content": text,
         "username": WEBHOOK_USERNAME,
-        "allowed_mentions": {"parse": []},
+        "allowed_mentions": (
+            {"parse": ["users", "roles"]} if EMENTAS_TAG else {"parse": []}
+        ),
     }
     status, body = http_post_json(WEBHOOK_URL, payload)
     print(f"Posted message (HTTP {status})")
