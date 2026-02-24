@@ -13,7 +13,7 @@ This repository is set up to run automatically with GitHub Actions (`.github/wor
 3. In your GitHub repo, go to `Settings` -> `Secrets and variables` -> `Actions`.
 4. Create a repository secret named `DISCORD_WEBHOOK_URL`.
 5. Paste your Discord webhook URL as the secret value.
-6. (Optional) Create a repository secret named `EMENTAS_TAG` (role mention like `<@&ROLE_ID>`).
+6. (Optional) Create a repository secret named `EMENTAS_TAG` (role mention like `<@&ROLE_ID>`) To get the role ID, you send a message in Discord with \@role and the ID will appear in the message.
 7. Go to the `Actions` tab and enable workflows if GitHub asks.
 8. Run the workflow once using `Daily Cantinas Meal` -> `Run workflow`.
 
