@@ -1,6 +1,3 @@
-# post_meal.py
-# Standard library only (no pip install needed)
-
 import json
 import os
 import sys
@@ -11,18 +8,36 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
+def load_dotenv_file(path: str = ".env"):
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
 
+                line = line.removeprefix("export ").strip()
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key:
+                    os.environ.setdefault(key, value)
+    except OSError:
+        pass
+
+
+load_dotenv_file()
 API_BASE = os.getenv("CANTINAS_API_BASE", "https://api.cantinas.pt/")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 TZ_NAME = os.getenv("TZ_NAME", "Europe/Lisbon")
 WEBHOOK_USERNAME = os.getenv("WEBHOOK_USERNAME", "Ementa UA")
 TARGET_DATE = os.getenv("TARGET_DATE")  
 ALLOWED_REFEITORIO_ORDER = ("Santiago", "Crasto")
-ALLOWED_REFEITORIO_LOOKUP = {
-    name.casefold(): name for name in ALLOWED_REFEITORIO_ORDER
-}
+ALLOWED_REFEITORIO_LOOKUP = {name.casefold(): name for name in ALLOWED_REFEITORIO_ORDER}
 DISCORD_INDENT = "\u00A0" * 4
-
+EMENTAS_TAG = os.getenv("EMENTAS_TAG", "").strip()
 
 def fail(msg: str, code: int = 1):
     print(f"ERROR: {msg}", file=sys.stderr)
@@ -291,6 +306,9 @@ def format_menu_message(payload, target_date: str) -> str:
 
         if period_had_entries and lines[-1] != "":
             lines.append("")
+        
+    if EMENTAS_TAG:
+        lines.append(EMENTAS_TAG)
 
     return "\n".join(lines).rstrip()
 

@@ -21,6 +21,7 @@ jobs:
       - name: Post menu to Discord webhook
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          EMENTAS_TAG: ${{ secrets.EMENTAS_TAG }}
           CANTINAS_API_BASE: https://api.cantinas.pt/
           TZ_NAME: Europe/Lisbon
           WEBHOOK_USERNAME: Cantinas
