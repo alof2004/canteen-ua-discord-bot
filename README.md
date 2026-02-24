@@ -7,14 +7,13 @@ This repository is set up to run automatically with GitHub Actions (`.github/wor
 ## GitHub Actions Setup (Recommended)
 
 1. Fork this repository (or push it to your own repo).
-2. Create a Discord webhook in the channel where you want the menu posted. (Go to your Discord server settings, then `Integrations` -> `Webhooks`.)
+2. Create a Discord webhook in the channel where you want the menu posted. 
 ![Go to Server Setting](figs/image.png)
 ![Click on "Webhooks" and create a new one](figs/image-1.png)
-
 3. In your GitHub repo, go to `Settings` -> `Secrets and variables` -> `Actions`.
 4. Create a repository secret named `DISCORD_WEBHOOK_URL`.
 5. Paste your Discord webhook URL as the secret value.
-6. (Optional) Create a repository secret named `EMENTAS_TAG` (example: `@ementas` or a role mention like `<@&ROLE_ID>`).
+6. (Optional) Create a repository secret named `EMENTAS_TAG` (role mention like `<@&ROLE_ID>`).
 7. Go to the `Actions` tab and enable workflows if GitHub asks.
 8. Run the workflow once using `Daily Cantinas Meal` -> `Run workflow`.
 
@@ -78,3 +77,31 @@ If `EMENTAS_TAG` is not set, no extra tag line is added.
 3. Groups results by `Almoço` / `Jantar`.
 4. Formats a Discord-friendly message.
 5. Posts the message to your Discord webhook.
+
+## Message Format Example
+
+```
+🍽️ Menu do dia - 24/02/2026
+
+🌞 Almoço
+    📍 Santiago
+        • 🍲 Sopa: SOPA PRIMAVERA
+        • 🐟 PRATO PEIXE: BACALHAU COM BROA E BATATA À MURRO
+        • 🥗 PRATO DIETA: BACALHAU COZIDO COM BATATA COZIDA E COUVES
+        • 🍖 PRATO CARNE: COSTELETAS Á SALSICHEIRO COM ARROZ
+        • 🥦 PRATO VEGETARIANO: MASSA Á LAVRADOR VEGETARIANA
+
+    📍 Crasto
+        • 🍲 Sopa: SOPA PRIMAVERA
+        • 🍖 PRATO CARNE: ARROZ DE AVES
+        • 🐟 PRATO PEIXE: OMELETE DE CAMARÃO E BATATA FRITA
+        • 🥦 PRATO VEGETARIANO: ESTUFADO DE SALSICHA VEGETARIANA E ARROZ
+
+🌙 Jantar
+    📍 Santiago
+        • 🍲 Sopa: SOPA PRIMAVERA
+        • 🍖 PRATO CARNE: ALHEIRA COM ARROZ E OVO ESTRELADO
+        • 🥦 PRATO VEGETARIANO: STROGONOFF DE LENTILHAS E COGUMELOS COM ARROZ
+
+@ementas
+```
